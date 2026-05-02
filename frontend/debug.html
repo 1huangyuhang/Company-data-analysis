@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debug - 企业数据管理系统</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .error {
+      color: red;
+      padding: 20px;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+
+    .success {
+      color: green;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // 简单的测试组件
+    function TestComponent() {
+      return (
+        <div style={{ padding: '20px', border: '2px solid green' }}>
+          <h1 style={{ color: 'green' }}>✅ React 正常工作</h1>
+          <p>如果看到这个，说明React和Babel配置正确。</p>
+          <ul>
+            <li>✅ React 18 加载成功</li>
+            <li>✅ Babel 转译正常</li>
+            <li>✅ 基本样式生效</li>
+          </ul>
+        </div>
+      );
+    }
+
+    // 渲染测试组件
+    try {
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<TestComponent />);
+      console.log('✅ 渲染成功');
+    } catch (error) {
+      console.error('❌ 渲染失败:', error);
+      document.getElementById('root').innerHTML =
+        `<div class="error">渲染错误: ${error.message}</div>`;
+    }
+  </script>
+
+  <script>
+    // 检查浏览器控制台错误
+    window.addEventListener('error', function(e) {
+      console.error('页面错误:', e.error);
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error';
+      errorDiv.textContent = `页面错误: ${e.error.message}\n${e.error.stack}`;
+      document.body.appendChild(errorDiv);
+    });
+
+    // 检查资源加载情况
+    window.addEventListener('load', function() {
+      console.log('页面加载完成');
+      const scripts = document.querySelectorAll('script');
+      scripts.forEach(script => {
+        if (script.src) {
+          console.log(`脚本加载: ${script.src}`);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

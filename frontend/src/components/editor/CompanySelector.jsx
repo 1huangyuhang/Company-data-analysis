@@ -1,17 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { extractPhones } from "../../utils/formatters";
 
-function extractPhones(item) {
-  const raw = item?.raw_data || {};
-  const values = [];
-  for (const [key, value] of Object.entries(raw)) {
-    if (!/(手机|电话|联系方式|phone|mobile|tel)/i.test(String(key))) continue;
-    if (Array.isArray(value)) values.push(...value);
-    else values.push(value);
-  }
-  return [...new Set(values.map((x) => String(x ?? "").trim()).filter(Boolean))];
-}
-
-export default function CompanySelector({ items, selectedId, onSelect }) {
+export default function CompanySelector({ items = [], selectedId, onSelect }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const wrapperRef = useRef(null);
@@ -68,9 +58,9 @@ export default function CompanySelector({ items, selectedId, onSelect }) {
               <div className="company-selector-empty">没有匹配的企业</div>
             ) : (
               filteredGroups.map((group) => {
-                const single = group.list.length === 1;
-                if (single) {
-                  const item = group.list[0];
+                return group.list.map((item) => {
+                  const phones = extractPhones(item);
+                  const phoneHint = group.list.length > 1 ? `（${phones[0] || "手机号缺失"}）` : "";
                   return (
                     <button
                       key={item.id}
@@ -82,33 +72,10 @@ export default function CompanySelector({ items, selectedId, onSelect }) {
                       }}
                     >
                       {group.name}
+                      {phoneHint}
                     </button>
                   );
-                }
-
-                return (
-                  <div className="company-selector-group" key={group.name}>
-                    <div className="company-selector-group-name">{group.name}</div>
-                    <div className="company-selector-group-subtitle">手机号模块</div>
-                    {group.list.map((item) => {
-                      const phones = extractPhones(item);
-                      const phoneLabel = phones.length ? phones.join(" / ") : "手机号缺失";
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`company-selector-item phone-item ${selectedId === item.id ? "active" : ""}`}
-                          onClick={() => {
-                            onSelect(item.id);
-                            setOpen(false);
-                          }}
-                        >
-                          {phoneLabel}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
+                });
               })
             )}
           </div>

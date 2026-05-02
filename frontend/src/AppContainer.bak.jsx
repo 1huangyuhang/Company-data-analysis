@@ -5,24 +5,19 @@ import OverviewPanel from "./components/overview/OverviewPanel";
 import SearchPanel from "./components/search/SearchPanel";
 import SidebarTabs from "./components/layout/SidebarTabs";
 import Topbar from "./components/layout/Topbar";
-import { request, ensureAccessTokenOrOpenAuth, friendlyAuthErrorMessage } from "./utils/api";
+import { request } from "./utils/api";
 import { formatDisplayCode, parseCsvInput, safeJson } from "./utils/formatters";
 
 const EMPTY_EDIT = { id: "", name: "", city: "", industry: "", address: "", tags: "", raw_data: "{}" };
-const DEFAULT_SEARCH = { keyword: "", match_mode: "fuzzy", city: "", industry: "", import_id: "", page: 1, page_size: 20, total: 0, items: [] };
-
-function readInitialApiBase() {
-  const saved = localStorage.getItem("apiBase");
-  if (saved !== null) return saved;
-  if (import.meta.env.DEV) return "";
-  return "http://127.0.0.1:8000";
-}
+const DEFAULT_SEARCH = { keyword: "", match_mode: "fuzzy", city: "", industry: "", import_id: "", created_start: "", created_end: "", tags: "", tag_match: "any", import_start_date: "", import_end_date: "", sort_by: "created_at", sort_order: "desc", page: 1, page_size: 20, total: 0, items: [] };
 
 export default function AppContainer() {
+  // 基础状态
   const [tab, setTab] = useState("import");
   const [msg, setMsg] = useState({ text: "前端已就绪，请先导入 Excel 或直接检索。", error: false });
-  const [apiBase, setApiBase] = useState(readInitialApiBase);
+  const [apiBase, setApiBase] = useState(() => localStorage.getItem("apiBase") || "http://127.0.0.1:8000");
 
+  // 导入相关状态
   const [importId, setImportId] = useState(() => localStorage.getItem("importId") || "");
   const [importPageSize, setImportPageSize] = useState(() => Number(localStorage.getItem("importPageSize") || "20"));
   const [importPage, setImportPage] = useState(1);
@@ -32,21 +27,21 @@ export default function AppContainer() {
   const [editForm, setEditForm] = useState(EMPTY_EDIT);
   const [uploadFile, setUploadFile] = useState(null);
 
+  // 搜索相关状态
   const [search, setSearch] = useState(DEFAULT_SEARCH);
   const [rawPreview, setRawPreview] = useState("请先点击“查看”");
 
+  // 保存设置到localStorage
   useEffect(() => localStorage.setItem("apiBase", apiBase), [apiBase]);
   useEffect(() => localStorage.setItem("importId", importId), [importId]);
   useEffect(() => localStorage.setItem("importPageSize", String(importPageSize)), [importPageSize]);
 
+  // 计算属性
   const importTotalPage = useMemo(() => Math.max(1, Math.ceil(importTotal / importPageSize)), [importTotal, importPageSize]);
   const searchTotalPage = useMemo(() => Math.max(1, Math.ceil(search.total / search.page_size)), [search.total, search.page_size]);
 
   async function queryImport(page = importPage) {
     if (!importId.trim()) return setMsg({ text: "请输入 import_id。", error: true });
-    if (!ensureAccessTokenOrOpenAuth()) {
-      return setMsg({ text: "请先登录后再查询导入数据。", error: true });
-    }
     setMsg({ text: "正在查询导入数据...", error: false });
     try {
       const data = await request(`${apiBase.replace(/\/$/, "")}/api/v1/companies/by-import/${encodeURIComponent(importId.trim())}?page=${page}&page_size=${importPageSize}`);
@@ -59,16 +54,13 @@ export default function AppContainer() {
       }
       setMsg({ text: `查询完成：当前批次共 ${data.data.total} 条。`, error: false });
     } catch (e) {
-      setMsg({ text: `查询失败：${friendlyAuthErrorMessage(e.message)}`, error: true });
+      setMsg({ text: `查询失败：${e.message}`, error: true });
     }
   }
 
   async function onImport(e) {
     e.preventDefault();
     if (!uploadFile) return setMsg({ text: "请先选择 Excel 文件。", error: true });
-    if (!ensureAccessTokenOrOpenAuth()) {
-      return setMsg({ text: "请先登录后再上传并导入（已为你打开登录窗口）。", error: true });
-    }
     const formData = new FormData();
     formData.append("file", uploadFile);
     setMsg({ text: "正在上传并导入，请稍候...", error: false });
@@ -78,7 +70,7 @@ export default function AppContainer() {
       setMsg({ text: `导入成功：${data.data.import_id}，可直接查询并调整导入数据。`, error: false });
       queryImport(1);
     } catch (e2) {
-      setMsg({ text: `导入失败：${friendlyAuthErrorMessage(e2.message)}`, error: true });
+      setMsg({ text: `导入失败：${e2.message}`, error: true });
     }
   }
 
@@ -95,15 +87,8 @@ export default function AppContainer() {
   async function saveEdit(e) {
     e.preventDefault();
     if (!selectedId) return setMsg({ text: "请先选择记录。", error: true });
-    if (!ensureAccessTokenOrOpenAuth()) {
-      return setMsg({ text: "请先登录后再保存修改。", error: true });
-    }
     let raw;
-    try {
-      raw = JSON.parse(editForm.raw_data || "{}");
-    } catch {
-      return setMsg({ text: "raw_data 不是合法 JSON。", error: true });
-    }
+    try { raw = JSON.parse(editForm.raw_data || "{}"); } catch { return setMsg({ text: "raw_data 不是合法 JSON。", error: true }); }
     try {
       await request(`${apiBase.replace(/\/$/, "")}/api/v1/companies/${selectedId}`, {
         method: "PUT",
@@ -113,41 +98,56 @@ export default function AppContainer() {
       setMsg({ text: `保存成功：企业 #${selectedId} 已更新。`, error: false });
       queryImport(importPage);
     } catch (e3) {
-      setMsg({ text: `保存失败：${friendlyAuthErrorMessage(e3.message)}`, error: true });
+      setMsg({ text: `保存失败：${e3.message}`, error: true });
     }
   }
 
-  async function doSearch(page = search.page) {
-    if (!ensureAccessTokenOrOpenAuth()) {
-      return setMsg({ text: "请先登录后再检索企业。", error: true });
-    }
+  async function doSearch(page = search.page, pageSize = search.page_size) {
     setMsg({ text: "正在检索企业数据...", error: false });
     try {
-      const payload = {
+      const searchParams = {
         keyword: search.keyword.trim(),
         match_mode: search.match_mode,
         filters: {
-          city: search.city ? search.city.split(",").map((s) => s.trim()).filter(Boolean) : [],
-          industry: search.industry ? search.industry.split(",").map((s) => s.trim()).filter(Boolean) : [],
+          city: search.city ? search.city.split(',').map(s => s.trim()).filter(Boolean) : [],
+          industry: search.industry ? search.industry.split(',').map(s => s.trim()).filter(Boolean) : [],
           import_id: search.import_id.trim() || null,
+          created_start: search.created_start || null,
+          created_end: search.created_end || null,
+          tags: search.tags ? search.tags.split(',').map(s => s.trim()).filter(Boolean) : [],
+          tag_match: search.tag_match || 'any',
+          import_start_date: search.import_start_date || null,
+          import_end_date: search.import_end_date || null
         },
         page,
-        page_size: search.page_size,
+        page_size: pageSize,
+        sort_by: search.sort_by || 'created_at',
+        sort_order: search.sort_order || 'desc'
       };
+
       const data = await request(`${apiBase.replace(/\/$/, "")}/api/v1/companies/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(searchParams)
       });
-      setSearch((prev) => ({ ...prev, page, total: data.data.total, items: data.data.items || [] }));
+
+      setSearch((prev) => ({
+        ...prev,
+        page,
+        page_size: pageSize,
+        total: data.data.total,
+        items: data.data.items || [],
+        total_pages: data.data.total_pages || Math.ceil(data.data.total / pageSize)
+      }));
       setMsg({ text: `检索完成：命中 ${data.data.total} 条。`, error: false });
     } catch (e4) {
-      setMsg({ text: `检索失败：${friendlyAuthErrorMessage(e4.message)}`, error: true });
+      setMsg({ text: `检索失败：${e4.message}`, error: true });
     }
   }
 
   useEffect(() => {
     if (importId.trim()) queryImport(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function openSearchWithImportId() {
@@ -158,6 +158,55 @@ export default function AppContainer() {
     setMsg({ text: `已切换到企业检索，并带入导入批次：${value}`, error: false });
   }
 
+  // 点击历史记录加载数据
+  async function handleHistorySelect(importId, fileName) {
+    setLoadingHistoryData(true);
+    setMsg({ text: `正在加载历史记录：${fileName}...`, error: false });
+
+    try {
+      // 检查缓存
+      if (importCache.current.has(importId)) {
+        const cached = importCache.current.get(importId);
+        // 检查缓存是否过期（30分钟）
+        if (Date.now() - cached.timestamp < 30 * 60 * 1000) {
+          setImportId(importId);
+          setSearch((prev) => ({
+            ...prev,
+            import_id: importId,
+            page: 1,
+            items: cached.data,
+            total: cached.total
+          }));
+          setTab("search");
+          setMsg({ text: `已从缓存加载历史记录：${fileName}`, error: false });
+          setLoadingHistoryData(false);
+          return;
+        }
+      }
+
+      // 缓存未命中或已过期，查询数据库
+      setImportId(importId);
+      setSearch((prev) => ({ ...prev, import_id: importId, page: 1 }));
+      setTab("search");
+
+      // 查询导入数据
+      await queryImport(1);
+
+      // 更新缓存
+      importCache.current.set(importId, {
+        data: search.items,
+        total: search.total,
+        timestamp: Date.now()
+      });
+
+      setMsg({ text: `已成功加载历史记录：${fileName}`, error: false });
+    } catch (error) {
+      setMsg({ text: `加载历史记录失败：${error.message}`, error: true });
+    } finally {
+      setLoadingHistoryData(false);
+    }
+  }
+
   return (
     <div className="app-layout">
       <Topbar apiBase={apiBase} setApiBase={setApiBase} />
@@ -166,49 +215,8 @@ export default function AppContainer() {
         <div className="content-surface">
           <section className="content">
             <MessageBar msg={msg} />
-            {tab === "import" && (
-              <ImportPanel
-                onImport={onImport}
-                setUploadFile={setUploadFile}
-                importId={importId}
-                setImportId={setImportId}
-                importPageSize={importPageSize}
-                setImportPageSize={setImportPageSize}
-                queryImport={queryImport}
-                openSearchWithImportId={openSearchWithImportId}
-                importItems={importItems}
-                selectedId={selectedId}
-                selectItem={selectItem}
-                formatDisplayCode={formatDisplayCode}
-                importPage={importPage}
-                importTotalPage={importTotalPage}
-                importTotal={importTotal}
-                editForm={editForm}
-                setEditForm={setEditForm}
-                saveEdit={saveEdit}
-                setSelectedId={setSelectedId}
-                setEditFormToEmpty={() => setEditForm(EMPTY_EDIT)}
-                selectItemById={selectItemById}
-              />
-            )}
-            {tab === "search" && (
-              <>
-                <SearchPanel
-                  search={search}
-                  setSearch={setSearch}
-                  doSearch={doSearch}
-                  searchTotalPage={searchTotalPage}
-                  setRawPreview={setRawPreview}
-                  formatDisplayCode={formatDisplayCode}
-                  filters={search}
-                  setFilters={setSearch}
-                />
-                <div className="card">
-                  <h3>企业全量字段预览（raw_data）</h3>
-                  <pre className="json-box">{rawPreview}</pre>
-                </div>
-              </>
-            )}
+            {tab === "import" && <ImportPanel onImport={onImport} setUploadFile={setUploadFile} importId={importId} setImportId={setImportId} importPageSize={importPageSize} setImportPageSize={setImportPageSize} queryImport={queryImport} openSearchWithImportId={openSearchWithImportId} importItems={importItems} selectedId={selectedId} selectItem={selectItem} formatDisplayCode={formatDisplayCode} importPage={importPage} importTotalPage={importTotalPage} importTotal={importTotal} editForm={editForm} setEditForm={setEditForm} saveEdit={saveEdit} setSelectedId={setSelectedId} setEditFormToEmpty={() => setEditForm(EMPTY_EDIT)} selectItemById={selectItemById} />}
+            {tab === "search" && (<><SearchPanel search={search} setSearch={setSearch} doSearch={doSearch} searchTotalPage={searchTotalPage} setRawPreview={setRawPreview} formatDisplayCode={formatDisplayCode} filters={search} setFilters={setSearch} onHistorySelect={handleHistorySelect} loadingHistoryData={loadingHistoryData} /><div className="card"><h3>企业全量字段预览（raw_data）</h3><pre className="json-box">{rawPreview}</pre></div></>)}
             {tab === "overview" && <OverviewPanel search={search} />}
           </section>
         </div>

@@ -2,6 +2,9 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 pydantic
+email-validator
+PyJWT
+passlib[bcrypt]
 python-multipart
 pandas
 openpyxl

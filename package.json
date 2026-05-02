@@ -1,0 +1,11 @@
+{
+  "name": "company-data",
+  "private": true,
+  "description": "根目录便捷脚本；前端依赖请在 frontend 安装一次：npm install --prefix frontend",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "preview": "npm run preview --prefix frontend",
+    "install:frontend": "npm install --prefix frontend"
+  }
+}

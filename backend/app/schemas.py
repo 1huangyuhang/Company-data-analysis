@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 
 class ApiOk(BaseModel):
@@ -47,3 +48,16 @@ class CompanyUpdateRequest(BaseModel):
     address: Optional[str] = None
     tags: Optional[List[str]] = None
     raw_data: Optional[Dict[str, Any]] = None
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+    role: str
+    is_active: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

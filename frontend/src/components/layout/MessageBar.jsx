@@ -1,6 +1,6 @@
 export default function MessageBar({ msg }) {
   return (
-    <div className="message" style={{ color: msg.error ? "#b42318" : "#475467" }}>
+    <div className={`message ${msg.error ? "error" : "info"}`}>
       {msg.text}
     </div>
   );

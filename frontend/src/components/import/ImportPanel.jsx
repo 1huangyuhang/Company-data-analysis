@@ -1,5 +1,7 @@
 import { useMemo } from "react";
-import CompanySelector from "./CompanySelector";
+import CompanySelector from "../editor/CompanySelector";
+import useImportDataSource from "../../hooks/useImportDataSource";
+import { extractPhones } from "../../utils/formatters";
 
 const INDUSTRY_OPTIONS = ["软件和信息服务业", "先进制造业", "电子商务", "生物医药", "新能源与新材料", "金融服务", "教育与培训", "现代物流"];
 
@@ -13,7 +15,6 @@ export default function ImportPanel({
   queryImport,
   openSearchWithImportId,
   importItems,
-  importSelectorItems,
   selectedId,
   selectItem,
   formatDisplayCode,
@@ -27,10 +28,12 @@ export default function ImportPanel({
   setEditFormToEmpty,
   selectItemById,
 }) {
+  const { dataSource } = useImportDataSource(importItems);
+
   const rawColumns = useMemo(() => {
     const seen = new Set();
     const cols = [];
-    importItems.forEach((item) => {
+    dataSource.forEach((item) => {
       Object.keys(item.raw_data || {}).forEach((key) => {
         if (seen.has(key)) return;
         seen.add(key);
@@ -38,14 +41,21 @@ export default function ImportPanel({
       });
     });
     return cols;
-  }, [importItems]);
+  }, [dataSource]);
 
   function renderCell(value) {
     if (value === null || value === undefined) return "";
     if (Array.isArray(value)) return value.join(", ");
-    if (typeof value === "object") return JSON.stringify(value);
+    if (typeof value === "object") return JSON.stringify(value, null, 2);
     return String(value);
   }
+
+  const selectedCompany = useMemo(() => {
+    if (!selectedId) return null;
+    return dataSource.find((item) => item.id === selectedId) || null;
+  }, [selectedId, dataSource]);
+
+  const selectedPhones = useMemo(() => extractPhones(selectedCompany), [selectedCompany]);
 
   return (
     <>
@@ -57,7 +67,7 @@ export default function ImportPanel({
         </div>
       </form>
 
-      <div className="card">
+      <div className="card import-query-card">
         <h3>导入数据查询与调整</h3>
         <div className="row">
           <input value={importId} onChange={(e) => setImportId(e.target.value)} placeholder="请输入 import_id" />
@@ -148,11 +158,27 @@ export default function ImportPanel({
           <div className="select-wrap">
             <label>选择企业（按名称）</label>
             <CompanySelector
-              items={importSelectorItems}
+              items={dataSource}
               selectedId={selectedId}
               onSelect={selectItemById}
             />
           </div>
+        </div>
+        <div className="phone-module">
+          <label>手机号模块</label>
+          {!selectedId ? (
+            <div className="phone-module-empty">请先选择企业后查看手机号</div>
+          ) : selectedPhones.length ? (
+            <div className="phone-chip-list">
+              {selectedPhones.map((phone) => (
+                <span key={phone} className="phone-chip">
+                  {phone}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="phone-module-empty">该企业未识别到手机号字段</div>
+          )}
         </div>
         <div className="grid">
           <div>

@@ -1,3 +1,14 @@
+"""
+数据模型与「按账号隔离」说明（单库多租户，行业常见做法）
+
+- 物理上：一个应用使用一套数据库（见 database.py），便于部署与备份。
+- 逻辑上：每个账号的数据通过外键与查询条件隔离，而不是每个账号单独建库。
+- 归属链：User（账号） -> ImportTask（一次导入，user_id）-> Company（企业行，import_id 指向该任务）。
+- 权限：所有读 Company 的接口应对非管理员限定 import_id ∈ 当前用户拥有的 ImportTask.id；
+  全局检索（无 import_id）也必须加同样限定，避免看到他人导入的数据。
+
+若未来需要「一租户一库」，需引入动态 DATABASE_URL / 连接路由，与当前结构不同。
+"""
 from datetime import datetime
 
 from sqlalchemy import JSON, Column, DateTime, Integer, String, Text, ForeignKey

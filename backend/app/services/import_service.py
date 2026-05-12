@@ -52,9 +52,9 @@ def _to_json_safe(value):
     return value
 
 
-def import_excel_bytes(db: Session, filename: str, content: bytes) -> Tuple[str, int]:
+def import_excel_bytes(db: Session, filename: str, content: bytes, user_id: int) -> Tuple[str, int]:
     import_id = f"imp_{uuid.uuid4().hex[:10]}"
-    task = ImportTask(id=import_id, file_name=filename, status="processing")
+    task = ImportTask(id=import_id, user_id=user_id, file_name=filename, status="processing")
     db.add(task)
     db.commit()
 

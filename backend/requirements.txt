@@ -5,6 +5,8 @@ pydantic
 email-validator
 PyJWT
 passlib[bcrypt]
+# passlib 与 bcrypt>=4.1 不兼容（Python 3.13 下注册/登录会 500）；须限制 bcrypt 主版本
+bcrypt>=4.0.1,<4.1
 python-multipart
 pandas
 openpyxl

@@ -21,6 +21,13 @@ def search_companies(
 
     query = db.query(Company)
 
+    # 多租户：非管理员只能检索自己导入批次下的企业（与「每账号对应的数据」一致）
+    if current_user.role != "admin":
+        user_import_ids = [row[0] for row in db.query(ImportTask.id).filter(ImportTask.user_id == current_user.id).all()]
+        if not user_import_ids:
+            return {"ok": True, "data": {"total": 0, "page": page, "page_size": page_size, "items": []}}
+        query = query.filter(Company.import_id.in_(user_import_ids))
+
     if payload.filters.city:
         query = query.filter(Company.city.in_(payload.filters.city))
     if payload.filters.industry:

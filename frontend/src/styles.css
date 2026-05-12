@@ -751,9 +751,8 @@ th {
 
 .company-selector-panel {
   position: absolute;
-  top: 100%;
-  left: 0;
   right: 0;
+  width: 100%;
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -1184,4 +1183,148 @@ th {
 
 .empty-state-action {
   margin-top: var(--spacing-lg);
+}
+
+/* 导入页：待上传文件队列与历史导入 */
+.file-upload-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.file-upload-toolbar > button[type="submit"] {
+  width: auto;
+}
+
+.sr-only-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 选择文件：可用 label 或 button.file-queue-trigger（程序化打开 file input） */
+.file-queue-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 var(--spacing-lg);
+  margin: 0;
+  cursor: pointer;
+  width: auto;
+  height: auto;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.file-queue-trigger:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+}
+
+.pending-file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.pending-file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-subtle, #f8fafc);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.pending-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.pending-file-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.pending-file-remove {
+  flex-shrink: 0;
+  min-width: 64px;
+}
+
+.import-history-card {
+  margin-bottom: var(--spacing-lg);
+}
+
+.import-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.import-history-head h3 {
+  margin: 0;
+}
+
+.import-history-head .import-history-refresh {
+  min-width: 96px;
+}
+
+.import-history-wrap {
+  margin-top: var(--spacing-md);
+}
+
+.import-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.import-history-table th,
+.import-history-table td {
+  border: 1px solid var(--color-border);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+}
+
+.import-history-table th {
+  background: var(--color-bg-subtle, #f1f5f9);
+  font-weight: var(--font-weight-semibold);
+}
+
+.mono-cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: var(--font-size-xs);
+}
+
+.hint-text.muted {
+  opacity: 0.85;
+}
+
+.nowrap {
+  white-space: nowrap;
 }

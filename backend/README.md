@@ -35,3 +35,4 @@ npm run dev -- --host 127.0.0.1 --port 5500
 
 - 默认数据库：`sqlite:///./app.db`（加急本地可跑）
 - 生产切换 PostgreSQL：设置环境变量 `DATABASE_URL`
+- 若 **注册/登录返回 HTTP 500**：多为 `bcrypt` 版本与 `passlib` 冲突，请重新执行 `pip3 install -r requirements.txt`（已固定 `bcrypt<4.1`），并重启 uvicorn。

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ExportPanel from "./ExportPanel";
+import { formatImportIdForDisplay } from "../../utils/formatters";
 
 const DEFAULT_SEARCH = {
   keyword: "",
@@ -20,6 +21,8 @@ const DEFAULT_FILTERS = {
   tag_match: "any",
   import_start_date: "",
   import_end_date: "",
+  sort_by: "created_at",
+  sort_order: "desc",
 };
 
 const TAG_MATCH_OPTIONS = [
@@ -48,8 +51,12 @@ export default function SearchPanel({ search, setSearch, doSearch, searchTotalPa
   };
 
   const handleReset = () => {
-    setSearch(DEFAULT_SEARCH);
-    setFilters(DEFAULT_FILTERS);
+    // setFilters 与 setSearch 常为同一函数：不可先 DEFAULT_SEARCH 再 DEFAULT_FILTERS，否则会丢掉 keyword、match_mode 等
+    setSearch((prev) => ({
+      ...DEFAULT_SEARCH,
+      page_size: prev.page_size,
+      ...DEFAULT_FILTERS,
+    }));
   };
 
   const updateFilter = (key, value) => {
@@ -121,11 +128,12 @@ export default function SearchPanel({ search, setSearch, doSearch, searchTotalPa
               />
             </div>
             <div>
-              <label>导入批次</label>
+              <label>Excel 导入编号</label>
               <input
                 value={mergedFilters.import_id}
                 onChange={(e) => updateFilter("import_id", e.target.value)}
-                placeholder="imp_20240101"
+                placeholder="留空=不限定；填写则只查该次上传"
+                title="与「Excel 导入」页成功导入后显示的编号一致，例如 imp_xxxxxxxxxx"
               />
             </div>
             <div>
@@ -154,9 +162,11 @@ export default function SearchPanel({ search, setSearch, doSearch, searchTotalPa
               <select
                 value={`${mergedFilters.sort_by || "created_at"}_${mergedFilters.sort_order || "desc"}`}
                 onChange={(e) => {
-                  const [field, order] = e.target.value.split("_");
-                  updateFilter("sort_by", field);
-                  updateFilter("sort_order", order);
+                  const v = e.target.value;
+                  const i = v.lastIndexOf("_");
+                  if (i <= 0) return;
+                  updateFilter("sort_by", v.slice(0, i));
+                  updateFilter("sort_order", v.slice(i + 1));
                 }}
               >
                 {SORT_OPTIONS.map((opt) => (
@@ -207,7 +217,7 @@ export default function SearchPanel({ search, setSearch, doSearch, searchTotalPa
 
         {/* 操作按钮 */}
         <div className="row">
-          <button type="submit">执行检索</button>
+          <button type="submit">开始检索</button>
           <button className="secondary" type="button" onClick={handleReset}>
             重置条件
           </button>
@@ -234,7 +244,7 @@ export default function SearchPanel({ search, setSearch, doSearch, searchTotalPa
                 <th>城市</th>
                 <th>行业</th>
                 <th>地址</th>
-                <th>导入批次</th>
+                <th>Excel 导入编号</th>
                 <th>源行号</th>
                 <th>标签</th>
                 <th>查看</th>
@@ -253,7 +263,7 @@ export default function SearchPanel({ search, setSearch, doSearch, searchTotalPa
                     <td>{item.city}</td>
                     <td>{item.industry}</td>
                     <td>{item.address}</td>
-                    <td>{item.import_id || "-"}</td>
+                    <td>{formatImportIdForDisplay(item.import_id)}</td>
                     <td>{item.source_row || "-"}</td>
                     <td>{Array.isArray(item.tags) ? item.tags.join(", ") : ""}</td>
                     <td>
@@ -290,6 +300,7 @@ export default function SearchPanel({ search, setSearch, doSearch, searchTotalPa
           <div className="export-overlay" onClick={handleCloseExport}></div>
           <ExportPanel
             search={search}
+            setSearch={setSearch}
             doSearch={doSearch}
             formatDisplayCode={formatDisplayCode}
             onClose={handleCloseExport}

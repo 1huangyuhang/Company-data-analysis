@@ -33,6 +33,9 @@ export function friendlyAuthErrorMessage(raw) {
   if (s === "Not authenticated" || s.includes("Could not validate credentials") || s.includes("无效的认证凭证")) {
     return "未登录或登录已过期，请先点击顶部「登录」。";
   }
+  if (s.includes("无权访问此导入批次") || s.includes("无权访问此导入任务")) {
+    return "该 Excel 导入编号不属于当前账号，或编号填写错误；请使用「Excel 导入」页本次上传生成的编号。";
+  }
   return s;
 }
 
@@ -94,6 +97,7 @@ export const API_PATHS = {
   // 导入资源
   imports: {
     create: "/api/v1/import/excel", // POST 创建导入任务
+    history: "/api/v1/import/history", // GET 历史导入列表
     getCompanies: (importId) => `/api/v1/companies/by-import/${encodeURIComponent(importId)}`, // GET 获取导入的企业
   },
   // 企业资源

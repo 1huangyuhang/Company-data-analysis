@@ -4,7 +4,7 @@ import AuthModal from "./AuthModal";
 
 const AUTH_USERNAME_KEY = "auth_username";
 
-export default function Topbar({ apiBase, setApiBase }) {
+export default function Topbar({ apiBase, setApiBase, onAuthSessionChange }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [authInitialTab, setAuthInitialTab] = useState("login");
   const [loggedInAs, setLoggedInAs] = useState(() => {
@@ -52,10 +52,12 @@ export default function Topbar({ apiBase, setApiBase }) {
       /* ignore */
     }
     setLoggedInAs("");
+    onAuthSessionChange?.({ type: "logout" });
   }
 
   function handleLoggedIn(username) {
     setLoggedInAs(username);
+    onAuthSessionChange?.({ type: "login" });
   }
 
   return (

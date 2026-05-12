@@ -2,6 +2,12 @@
  * 数据格式化工具函数
  */
 
+/** 表格列展示：一次 Excel 上传对应一个系统编号（仍以 imp_ 开头便于与后端一致） */
+export function formatImportIdForDisplay(id) {
+  if (id == null || String(id).trim() === "") return "—";
+  return String(id).trim();
+}
+
 export function formatDisplayCode(item, index, page, pageSize, importIdForFallback = "") {
   const importToken = (item.import_id || importIdForFallback || "").replace(/^imp_/i, "").slice(-4).toUpperCase() || "GEN";
   if (item.source_row) return `${importToken}-${String(item.source_row).padStart(4, "0")}`;

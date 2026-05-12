@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { EXPORT_COLUMNS, EXPORT_TYPES, exportToCSV, formatExportData } from "../../utils/export";
 
-const ExportPanel = ({ search, doSearch, formatDisplayCode, onClose }) => {
+const ExportPanel = ({ search, setSearch, doSearch, formatDisplayCode, onClose }) => {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState({ page: 0, totalPages: 0, percent: 0 });
   const [config, setConfig] = useState({
@@ -60,16 +60,11 @@ const ExportPanel = ({ search, doSearch, formatDisplayCode, onClose }) => {
           percent: Math.min(100, Math.round((currentPage / totalPages) * 100))
         }));
 
-        // 执行搜索获取当前页数据
-        await doSearch(currentPage, pageSize);
-
-        // 从search状态中获取数据
-        if (search.items && search.items.length > 0) {
-          allResults.push(...search.items);
-          totalPages = Math.ceil(search.total / pageSize);
-        } else {
-          break;
-        }
+        const pageData = await doSearch(currentPage, pageSize);
+        if (!pageData) break;
+        totalPages = Math.max(1, Math.ceil(pageData.total / pageSize));
+        if (!pageData.items?.length) break;
+        allResults.push(...pageData.items);
 
         currentPage++;
       } while (currentPage <= totalPages && allResults.length < 10000);

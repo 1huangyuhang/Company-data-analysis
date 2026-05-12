@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import CompanySelector from "../editor/CompanySelector";
+import ImportFileQueueToolbar from "./ImportFileQueueToolbar";
 import useImportDataSource from "../../hooks/useImportDataSource";
 import { extractPhones } from "../../utils/formatters";
 
@@ -7,7 +8,13 @@ const INDUSTRY_OPTIONS = ["软件和信息服务业", "先进制造业", "电子
 
 export default function ImportPanel({
   onImport,
-  setUploadFile,
+  pendingFiles,
+  onAddPendingFiles,
+  onRemovePendingFile,
+  importHistory,
+  importHistoryRefreshing = false,
+  onRefreshImportHistory,
+  onSelectHistoricalImport,
   importId,
   setImportId,
   importPageSize,
@@ -29,6 +36,12 @@ export default function ImportPanel({
   selectItemById,
 }) {
   const { dataSource } = useImportDataSource(importItems);
+
+  useEffect(() => {
+    pendingFiles.forEach((entry) => {
+      if (!(entry.file instanceof File)) onRemovePendingFile(entry.key);
+    });
+  }, [pendingFiles, onRemovePendingFile]);
 
   const rawColumns = useMemo(() => {
     const seen = new Set();
@@ -60,18 +73,83 @@ export default function ImportPanel({
   return (
     <>
       <h2>Excel 一键导入</h2>
-      <form className="card" onSubmit={onImport}>
-        <div className="row">
-          <input type="file" accept=".xlsx,.xls" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
-          <button type="submit">上传并导入</button>
+      <ImportFileQueueToolbar
+        pendingFiles={pendingFiles}
+        onAddPendingFiles={onAddPendingFiles}
+        onRemovePendingFile={onRemovePendingFile}
+        onUploadQueue={onImport}
+      />
+
+      <div className="card import-history-card">
+        <div className="table-head import-history-head">
+          <h3>历史导入记录</h3>
+          <button
+            type="button"
+            className="secondary import-history-refresh"
+            disabled={importHistoryRefreshing}
+            aria-busy={importHistoryRefreshing}
+            aria-label="刷新历史导入记录列表"
+            onClick={() => onRefreshImportHistory()}
+          >
+            {importHistoryRefreshing ? "刷新中…" : "刷新列表"}
+          </button>
         </div>
-      </form>
+        <p className="hint-text">以下为已写入数据库的导入批次。点击「加载该批」即可查看与编辑，无需重复上传文件。</p>
+        {!importHistory?.length ? (
+          <p className="hint-text muted">暂无记录（需先登录；若刚导入请点击「刷新列表」）。</p>
+        ) : (
+          <div className="table-wrap import-history-wrap">
+            <table className="import-history-table">
+              <thead>
+                <tr>
+                  <th>导入编号</th>
+                  <th>原文件名</th>
+                  <th>状态</th>
+                  <th>成功/总行</th>
+                  <th>创建时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importHistory.map((row) => (
+                  <tr key={row.import_id}>
+                    <td className="mono-cell">{row.import_id}</td>
+                    <td>{row.file_name}</td>
+                    <td>{row.status}</td>
+                    <td>
+                      {row.success_rows ?? 0} / {row.total_rows ?? 0}
+                    </td>
+                    <td className="nowrap">{row.created_at ? String(row.created_at).slice(0, 19).replace("T", " ") : "—"}</td>
+                    <td>
+                      <button type="button" className="secondary" onClick={() => onSelectHistoricalImport(row.import_id)}>
+                        加载该批
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="card import-query-card">
         <h3>导入数据查询与调整</h3>
+        <p className="hint-text">「本次 Excel 导入编号」在每次上传成功后自动生成，用于只查看或检索这一次上传的数据。</p>
         <div className="row">
-          <input value={importId} onChange={(e) => setImportId(e.target.value)} placeholder="请输入 import_id" />
-          <input id="importPageSize" type="number" value={importPageSize} onChange={(e) => setImportPageSize(Number(e.target.value || 20))} />
+          <div className="select-wrap">
+            <label htmlFor="import-batch-id">本次 Excel 导入编号</label>
+            <input
+              id="import-batch-id"
+              value={importId}
+              onChange={(e) => setImportId(e.target.value)}
+              placeholder="例如 imp_abc123def4"
+            />
+          </div>
+          <div className="select-wrap">
+            <label htmlFor="importPageSize">每页条数</label>
+            <input id="importPageSize" type="number" value={importPageSize} onChange={(e) => setImportPageSize(Number(e.target.value || 20))} />
+          </div>
           <button type="button" onClick={() => queryImport(1)}>
             查询导入数据
           </button>

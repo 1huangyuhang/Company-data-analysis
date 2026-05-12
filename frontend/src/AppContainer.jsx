@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ImportPanel from "./components/import/ImportPanel";
 import MessageBar from "./components/layout/MessageBar";
 import OverviewPanel from "./components/overview/OverviewPanel";
 import SearchPanel from "./components/search/SearchPanel";
 import SidebarTabs from "./components/layout/SidebarTabs";
 import Topbar from "./components/layout/Topbar";
-import { request, ensureAccessTokenOrOpenAuth, friendlyAuthErrorMessage } from "./utils/api";
+import { request, ensureAccessTokenOrOpenAuth, friendlyAuthErrorMessage, hasStoredAccessToken } from "./utils/api";
 import { formatDisplayCode, parseCsvInput, safeJson } from "./utils/formatters";
 
 const EMPTY_EDIT = { id: "", name: "", city: "", industry: "", address: "", tags: "", raw_data: "{}" };
@@ -30,9 +30,16 @@ export default function AppContainer() {
   const [importItems, setImportItems] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_EDIT);
-  const [uploadFile, setUploadFile] = useState(null);
+  /** 待上传队列：每项 { key, file }；上传成功或校验无效会从队列移除 */
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [importHistory, setImportHistory] = useState([]);
+  const [importHistoryRefreshing, setImportHistoryRefreshing] = useState(false);
 
   const [search, setSearch] = useState(DEFAULT_SEARCH);
+  const searchRef = useRef(search);
+  useEffect(() => {
+    searchRef.current = search;
+  }, [search]);
   const [rawPreview, setRawPreview] = useState("请先点击“查看”");
 
   useEffect(() => localStorage.setItem("apiBase", apiBase), [apiBase]);
@@ -42,14 +49,57 @@ export default function AppContainer() {
   const importTotalPage = useMemo(() => Math.max(1, Math.ceil(importTotal / importPageSize)), [importTotal, importPageSize]);
   const searchTotalPage = useMemo(() => Math.max(1, Math.ceil(search.total / search.page_size)), [search.total, search.page_size]);
 
-  async function queryImport(page = importPage) {
-    if (!importId.trim()) return setMsg({ text: "请输入 import_id。", error: true });
+  const addPendingFilesFromList = useCallback((fileList) => {
+    if (!fileList?.length) return;
+    setPendingFiles((prev) => {
+      const map = new Map(prev.map((x) => [x.key, x]));
+      for (const file of fileList) {
+        if (!file?.name?.toLowerCase().match(/\.(xlsx|xls)$/)) continue;
+        const key = `${file.name}::${file.size}::${file.lastModified}`;
+        map.set(key, { key, file });
+      }
+      return [...map.values()];
+    });
+  }, []);
+
+  const removePendingFile = useCallback((key) => {
+    setPendingFiles((p) => p.filter((x) => x.key !== key));
+  }, []);
+
+  const loadImportHistory = useCallback(async () => {
+    setImportHistoryRefreshing(true);
+    try {
+      if (!hasStoredAccessToken()) {
+        setImportHistory([]);
+        return;
+      }
+      const prefix = apiBase.replace(/\/$/, "");
+      try {
+        const data = await request(`${prefix}/api/v1/import/history?limit=100`);
+        setImportHistory(data.data.items || []);
+      } catch {
+        setImportHistory([]);
+      }
+    } finally {
+      setImportHistoryRefreshing(false);
+    }
+  }, [apiBase]);
+
+  /** @param {number} [page] @param {string} [batchIdOverride] 刚 setImportId 尚未提交时用 */
+  async function queryImport(page = importPage, batchIdOverride) {
+    const bid = (batchIdOverride != null && String(batchIdOverride).trim() !== "" ? String(batchIdOverride).trim() : importId.trim());
+    if (!bid) {
+      setMsg({ text: "请输入本次 Excel 导入编号。", error: true });
+      return null;
+    }
     if (!ensureAccessTokenOrOpenAuth()) {
-      return setMsg({ text: "请先登录后再查询导入数据。", error: true });
+      setMsg({ text: "请先登录后再查询导入数据。", error: true });
+      return null;
     }
     setMsg({ text: "正在查询导入数据...", error: false });
     try {
-      const data = await request(`${apiBase.replace(/\/$/, "")}/api/v1/companies/by-import/${encodeURIComponent(importId.trim())}?page=${page}&page_size=${importPageSize}`);
+      const prefix = apiBase.replace(/\/$/, "");
+      const data = await request(`${prefix}/api/v1/companies/by-import/${encodeURIComponent(bid)}?page=${page}&page_size=${importPageSize}`);
       setImportPage(page);
       setImportTotal(data.data.total);
       setImportItems(data.data.items || []);
@@ -57,28 +107,71 @@ export default function AppContainer() {
         setSelectedId(null);
         setEditForm(EMPTY_EDIT);
       }
-      setMsg({ text: `查询完成：当前批次共 ${data.data.total} 条。`, error: false });
+      const total = data.data.total;
+      setMsg({ text: `查询完成：该次上传共 ${total} 条。`, error: false });
+      return total;
     } catch (e) {
       setMsg({ text: `查询失败：${friendlyAuthErrorMessage(e.message)}`, error: true });
+      return null;
     }
   }
 
   async function onImport(e) {
-    e.preventDefault();
-    if (!uploadFile) return setMsg({ text: "请先选择 Excel 文件。", error: true });
+    e?.preventDefault?.();
+    const validQueue = pendingFiles.filter((x) => x.file instanceof File);
+    if (validQueue.length !== pendingFiles.length) setPendingFiles(validQueue);
+    if (!validQueue.length) return setMsg({ text: "请先选择 Excel 文件（可多选加入队列）。", error: true });
     if (!ensureAccessTokenOrOpenAuth()) {
       return setMsg({ text: "请先登录后再上传并导入（已为你打开登录窗口）。", error: true });
     }
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    setMsg({ text: "正在上传并导入，请稍候...", error: false });
-    try {
-      const data = await request(`${apiBase.replace(/\/$/, "")}/api/v1/import/excel`, { method: "POST", body: formData });
-      setImportId(data.data.import_id);
-      setMsg({ text: `导入成功：${data.data.import_id}，可直接查询并调整导入数据。`, error: false });
-      queryImport(1);
-    } catch (e2) {
-      setMsg({ text: `导入失败：${friendlyAuthErrorMessage(e2.message)}`, error: true });
+    const base = apiBase.replace(/\/$/, "");
+    const snapshot = [...validQueue];
+    let lastImportId = "";
+    let okCount = 0;
+    for (let i = 0; i < snapshot.length; i++) {
+      const entry = snapshot[i];
+      const file = entry.file;
+      if (!(file instanceof File) || !file.name?.toLowerCase().match(/\.(xlsx|xls)$/)) {
+        setPendingFiles((p) => p.filter((x) => x.key !== entry.key));
+        continue;
+      }
+      setMsg({ text: `正在导入第 ${i + 1} / ${snapshot.length} 个文件：${file.name}…`, error: false });
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+        const data = await request(`${base}/api/v1/import/excel`, { method: "POST", body: formData });
+        lastImportId = data.data.import_id;
+        setImportId(lastImportId);
+        okCount += 1;
+        setPendingFiles((p) => p.filter((x) => x.key !== entry.key));
+      } catch (e2) {
+        setMsg({ text: `导入失败（${file.name}）：${friendlyAuthErrorMessage(e2.message)}`, error: true });
+        return;
+      }
+    }
+    if (lastImportId) {
+      await loadImportHistory();
+      await queryImport(1, lastImportId);
+      setMsg({
+        text:
+          okCount > 1
+            ? `已成功导入 ${okCount} 个文件。当前展示最后一次导入编号：${lastImportId}。`
+            : `导入成功。本次导入编号：${lastImportId}，可在下方查询或到「企业检索」筛选该次上传。`,
+        error: false,
+      });
+    }
+  }
+
+  async function selectHistoricalImport(batchId) {
+    const id = String(batchId || "").trim();
+    if (!id) return;
+    setImportId(id);
+    if (!ensureAccessTokenOrOpenAuth()) {
+      return setMsg({ text: "请先登录后再加载历史导入数据。", error: true });
+    }
+    const total = await queryImport(1, id);
+    if (total != null) {
+      setMsg({ text: `已切换到历史导入「${id}」，共 ${total} 条（数据已在库中，无需再次上传文件）。`, error: false });
     }
   }
 
@@ -117,32 +210,55 @@ export default function AppContainer() {
     }
   }
 
-  async function doSearch(page = search.page) {
+  /** @returns {Promise<{ total: number, page: number, page_size: number, items: unknown[] } | null>} */
+  async function doSearch(pageArg, requestPageSize) {
     if (!ensureAccessTokenOrOpenAuth()) {
-      return setMsg({ text: "请先登录后再检索企业。", error: true });
+      setMsg({ text: "请先登录后再检索企业。", error: true });
+      return null;
     }
+    const s = searchRef.current;
+    const page =
+      typeof pageArg === "number" && pageArg >= 1 ? pageArg : Math.max(1, Number(s.page) || 1);
+    const pageSize =
+      typeof requestPageSize === "number" && requestPageSize >= 1
+        ? Math.min(200, Math.max(1, requestPageSize))
+        : Math.min(200, Math.max(1, Number(s.page_size) || 20));
+
     setMsg({ text: "正在检索企业数据...", error: false });
     try {
+      const cityStr = String(s.city ?? "").trim();
+      const indStr = String(s.industry ?? "").trim();
+      const impStr = String(s.import_id ?? "").trim();
       const payload = {
-        keyword: search.keyword.trim(),
-        match_mode: search.match_mode,
+        keyword: String(s.keyword ?? "").trim(),
+        match_mode: s.match_mode === "exact" ? "exact" : "fuzzy",
         filters: {
-          city: search.city ? search.city.split(",").map((s) => s.trim()).filter(Boolean) : [],
-          industry: search.industry ? search.industry.split(",").map((s) => s.trim()).filter(Boolean) : [],
-          import_id: search.import_id.trim() || null,
+          city: cityStr ? cityStr.split(",").map((x) => x.trim()).filter(Boolean) : [],
+          industry: indStr ? indStr.split(",").map((x) => x.trim()).filter(Boolean) : [],
+          import_id: impStr || null,
         },
         page,
-        page_size: search.page_size,
+        page_size: pageSize,
       };
       const data = await request(`${apiBase.replace(/\/$/, "")}/api/v1/companies/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      setSearch((prev) => ({ ...prev, page, total: data.data.total, items: data.data.items || [] }));
-      setMsg({ text: `检索完成：命中 ${data.data.total} 条。`, error: false });
+      const total = data.data.total;
+      const items = data.data.items || [];
+      setSearch((prev) => ({ ...prev, page, total, items }));
+      setMsg({
+        text:
+          total === 0
+            ? "检索完成：命中 0 条。若尚未导入 Excel，请先到「Excel 导入」页上传；若已导入，可放宽关键词或筛选条件。"
+            : `检索完成：命中 ${total} 条。`,
+        error: false,
+      });
+      return { total, page: data.data.page, page_size: data.data.page_size, items };
     } catch (e4) {
       setMsg({ text: `检索失败：${friendlyAuthErrorMessage(e4.message)}`, error: true });
+      return null;
     }
   }
 
@@ -150,17 +266,40 @@ export default function AppContainer() {
     if (importId.trim()) queryImport(1);
   }, []);
 
+  useEffect(() => {
+    if (tab === "import") loadImportHistory();
+  }, [tab, apiBase]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      setPendingFiles((p) => {
+        const next = p.filter((x) => x.file instanceof File);
+        return next.length === p.length ? p : next;
+      });
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
   function openSearchWithImportId() {
     const value = importId.trim();
-    if (!value) return setMsg({ text: "请先输入或生成 import_id。", error: true });
+    if (!value) return setMsg({ text: "请先在上方填写本次 Excel 导入编号。", error: true });
     setSearch((prev) => ({ ...prev, import_id: value, page: 1 }));
     setTab("search");
-    setMsg({ text: `已切换到企业检索，并带入导入批次：${value}`, error: false });
+    setMsg({ text: `已切换到企业检索，已填入本次导入编号「${value}」，点击「开始检索」即可。`, error: false });
   }
 
   return (
     <div className="app-layout">
-      <Topbar apiBase={apiBase} setApiBase={setApiBase} />
+      <Topbar
+        apiBase={apiBase}
+        setApiBase={setApiBase}
+        onAuthSessionChange={(ev) => {
+          if (ev?.type === "login") loadImportHistory();
+          if (ev?.type === "logout") setImportHistory([]);
+        }}
+      />
       <SidebarTabs tab={tab} setTab={setTab} />
       <main className="main-content">
         <div className="content-surface">
@@ -169,7 +308,13 @@ export default function AppContainer() {
             {tab === "import" && (
               <ImportPanel
                 onImport={onImport}
-                setUploadFile={setUploadFile}
+                pendingFiles={pendingFiles}
+                onAddPendingFiles={addPendingFilesFromList}
+                onRemovePendingFile={removePendingFile}
+                importHistory={importHistory}
+                importHistoryRefreshing={importHistoryRefreshing}
+                onRefreshImportHistory={loadImportHistory}
+                onSelectHistoricalImport={selectHistoricalImport}
                 importId={importId}
                 setImportId={setImportId}
                 importPageSize={importPageSize}

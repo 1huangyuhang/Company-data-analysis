@@ -36,8 +36,7 @@ export default function CompanySelector({ items = [], selectedId, onSelect }) {
   }, [groups, query]);
 
   const selectedItem = items.find((item) => item.id === selectedId);
-  const selectedPhones = selectedItem ? extractPhones(selectedItem) : [];
-  const selectedLabel = selectedItem ? `${selectedItem.name || "未命名企业"}${selectedPhones[0] ? `（${selectedPhones[0]}）` : ""}` : "请选择企业名称";
+  const selectedLabel = selectedItem ? (selectedItem.name || "未命名企业").trim() || "未命名企业" : "请选择企业名称";
 
   return (
     <div className="company-selector" ref={wrapperRef}>
@@ -58,24 +57,19 @@ export default function CompanySelector({ items = [], selectedId, onSelect }) {
               <div className="company-selector-empty">没有匹配的企业</div>
             ) : (
               filteredGroups.map((group) => {
-                return group.list.map((item) => {
-                  const phones = extractPhones(item);
-                  const phoneHint = group.list.length > 1 ? `（${phones[0] || "手机号缺失"}）` : "";
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`company-selector-item ${selectedId === item.id ? "active" : ""}`}
-                      onClick={() => {
-                        onSelect(item.id);
-                        setOpen(false);
-                      }}
-                    >
-                      {group.name}
-                      {phoneHint}
-                    </button>
-                  );
-                });
+                return group.list.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`company-selector-item ${selectedId === item.id ? "active" : ""}`}
+                    onClick={() => {
+                      onSelect(item.id);
+                      setOpen(false);
+                    }}
+                  >
+                    {group.name}
+                  </button>
+                ));
               })
             )}
           </div>
